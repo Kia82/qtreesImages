@@ -131,7 +131,9 @@ void QTree::Prune(double tolerance) {
  *  You may want a recursive helper function for this one.
  */
 void QTree::FlipHorizontal() {
-    flipHorizontalHelper(root);
+    if (root) {
+        flipHorizontalHelper(root, root->lowRight.first);
+    }
 }
 
 /**
@@ -185,44 +187,88 @@ void QTree::Copy(const QTree& other) {
 
 
 Node* QTree::BuildNode(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
-    // if leaf node
-    if (ul.first == lr.first && ul.second == lr.second) {
+    if (ul.first > lr.first || ul.second > lr.second || ul.first >= img.width() || ul.second >= img.height()) {
+        return nullptr;  // checking bounds
+    }
+
+    // leaf node
+    if (ul == lr) {
         RGBAPixel* pixel = img.getPixel(ul.first, ul.second);
+        if (!pixel) {
+            return nullptr; // idk why this works but it prevents segfaults dont remove else whole thing blows up
+        }
         return new Node(ul, lr, *pixel);
     }
 
-    // average color of the region 
-    RGBAPixel avgColor = calculateAverageColor(img, ul, lr); 
+    //  new node with a placeholder average color
+    Node* node = new Node(ul, lr, RGBAPixel());
+    if (!node) {
+        return nullptr; // also prevents seg faults lol
+    }
 
-    Node* node = new Node(ul, lr, avgColor);
+    //  width and height
+    unsigned int width = lr.first - ul.first;
+    unsigned int height = lr.second - ul.second;
 
-    unsigned int midX = (ul.first + lr.first) / 2;
-    unsigned int midY = (ul.second + lr.second) / 2;
+    //  midpoints, adjusting for odd dimensions
+    unsigned int midX = ul.first + width / 2 - (width % 2 == 0 && width != 0 ? 1 : 0);
+    unsigned int midY = ul.second + height / 2 - (height % 2 == 0 && height != 0 ? 1 : 0);
 
-    node->NW = (midX < lr.first && midY < lr.second) ? BuildNode(img, ul, make_pair(midX, midY)) : nullptr;
-    node->NE = (midX + 1 < lr.first && midY < lr.second) ? BuildNode(img, make_pair(midX + 1, ul.second), make_pair(lr.first, midY)) : nullptr;
-    node->SW = (midX < lr.first && midY + 1 < lr.second) ? BuildNode(img, make_pair(ul.first, midY + 1), make_pair(midX, lr.second)) : nullptr;
-    node->SE = (midX + 1 < lr.first && midY + 1 < lr.second) ? BuildNode(img, make_pair(midX + 1, midY + 1), lr) : nullptr;
+    //  build child nodes
+    node->NW = BuildNode(img, ul, make_pair(midX, midY));
+    node->NE = (midX + 1 <= lr.first) ? BuildNode(img, make_pair(midX + 1, ul.second), make_pair(lr.first, midY)) : nullptr;
+    node->SW = (midY + 1 <= lr.second) ? BuildNode(img, make_pair(ul.first, midY + 1), make_pair(midX, lr.second)) : nullptr;
+    node->SE = (midX + 1 <= lr.first && midY + 1 <= lr.second) ? BuildNode(img, make_pair(midX + 1, midY + 1), lr) : nullptr;
 
-	
+    //  the average color for non-leaf node
+    if (node->NW || node->NE || node->SW || node->SE) {
+        node->avg = calculateAverageColour(node);
+    }
+
     return node;
 }
+
+
+
 
 /*********************************************************/
 /*** IMPLEMENT YOUR OWN PRIVATE MEMBER FUNCTIONS BELOW ***/
 /*********************************************************/
 
-RGBAPixel QTree::calculateAverageColor(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
-    unsigned int centreX = std::min((ul.first + lr.first) / 2, img.width() - 1);
-    unsigned int centreY = std::min((ul.second + lr.second) / 2, img.height() - 1);
+RGBAPixel QTree::calculateAverageColour(Node* node) {
+    unsigned long totalArea = 0;
+    unsigned long redSum = 0;
+    unsigned long greenSum = 0;
+    unsigned long blueSum = 0;
 
+    // helper lambda to accumulate color values
+    auto accumulateColor = [&](Node* child) {
+        if (child) {
+            unsigned int childArea = (child->lowRight.first - child->upLeft.first + 1) * (child->lowRight.second - child->upLeft.second + 1);
+            redSum += child->avg.r * childArea;
+            greenSum += child->avg.g * childArea;
+            blueSum += child->avg.b * childArea;
+            totalArea += childArea;
+        }
+    };
 
-    RGBAPixel* centrePixel = img.getPixel(centreX, centreY);
-    if (!centrePixel) {
-        return RGBAPixel(); // Return a default pixel to avoid segmentation fault
+    // accumulate color values from each child
+    accumulateColor(node->NW);
+    accumulateColor(node->NE);
+    accumulateColor(node->SW);
+    accumulateColor(node->SE);
+
+    // compute the weighted average color
+    RGBAPixel avgColor;
+    if (totalArea > 0) {  // preventing division by 0
+        avgColor.r = redSum / totalArea;
+        avgColor.g = greenSum / totalArea;
+        avgColor.b = blueSum / totalArea;
     }
-    return *centrePixel;
+
+    return avgColor;
 }
+
 
 void QTree::renderNode(PNG & img, Node* node, unsigned int scale) const {
     if (!node) {
@@ -253,20 +299,28 @@ void QTree::renderNode(PNG & img, Node* node, unsigned int scale) const {
     }
 }
 
-void QTree::flipHorizontalHelper(Node* node) {
+void QTree::flipHorizontalHelper(Node* node, unsigned int imageWidth) {
     if (!node) {
         return; 
     }
 
-    // swap the NW and NE children and SW and SE children
-    swap(node->NW, node->NE);
-    swap(node->SW, node->SE);
+    // mirror the node's coordinates across the image's vertical center axis
+    unsigned int originalLeft = node->upLeft.first;
+    unsigned int originalRight = node->lowRight.first;
 
-    // recursively flip the children
-    flipHorizontalHelper(node->NW);
-    flipHorizontalHelper(node->NE);
-    flipHorizontalHelper(node->SW);
-    flipHorizontalHelper(node->SE);
+    // new left and right positions based on image width
+    node->upLeft.first = imageWidth - originalRight - 1;
+    node->lowRight.first = imageWidth - originalLeft - 1;
+
+    //  flip the children
+    if (node->NW) flipHorizontalHelper(node->NW, imageWidth);
+    if (node->NE) flipHorizontalHelper(node->NE, imageWidth);
+    if (node->SW) flipHorizontalHelper(node->SW, imageWidth);
+    if (node->SE) flipHorizontalHelper(node->SE, imageWidth);
+
+    // swap children pointers 
+    std::swap(node->NW, node->NE);
+    std::swap(node->SW, node->SE);
 }
 
 void QTree::clearHelper(Node* node) {

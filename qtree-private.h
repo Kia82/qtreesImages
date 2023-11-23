@@ -11,11 +11,11 @@
 
 // begin your declarations below
 
-RGBAPixel calculateAverageColor(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr);
+RGBAPixel calculateAverageColour(Node* node);
 
 void renderNode(PNG & img, Node* node, unsigned int scale) const;
 
-void flipHorizontalHelper(Node* node);
+void flipHorizontalHelper(Node* node, unsigned int imageWidth);
 
 void clearHelper(Node* node);
 
