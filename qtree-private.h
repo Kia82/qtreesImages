@@ -11,9 +11,20 @@
 
 // begin your declarations below
 
-RGBAPixel getAverage(Node* node);
+RGBAPixel calculateAverageColor(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr);
 
-bool isValid(Node* node);
-void drawRectangle(Node* node, PNG& img, unsigned int scale) const;
-void flip(Node* node);
-void rotate(Node* node);
+void renderNode(PNG & img, Node* node, unsigned int scale) const;
+
+void flipHorizontalHelper(Node* node);
+
+void clearHelper(Node* node);
+
+Node* copyHelper(Node* otherNode);
+
+void rotateCCWHelper(Node* node);
+
+void pruneHelper(Node* node, double tolerance);
+
+bool allLeavesWithinTolerance(Node* node, const RGBAPixel& avg, double tolerance);
+
+bool isLeaf(Node* node);

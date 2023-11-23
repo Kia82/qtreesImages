@@ -2,9 +2,9 @@ EXE = pa3
 
 OBJS_EXE = RGBAPixel.o lodepng.o PNG.o main.o qtree.o qtree-given.o
 
-CXX = g++
+CXX = clang++
 CXXFLAGS = -std=c++1y -c -g -O0 -Wall -Wextra -pedantic 
-LD = g++
+LD = clang++
 #LDFLAGS = -std=c++1y -stdlib=libc++ -lc++abi -lpthread -lm
 LDFLAGS = -std=c++1y -lpthread -lm 
 

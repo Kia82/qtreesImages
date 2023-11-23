@@ -43,110 +43,7 @@
  * region and do not overlap.
  */
 QTree::QTree(const PNG& imIn) {
-	// ADD YOUR IMPLEMENTATION BELOW
-	height = imIn.height();
-	width = imIn.width();
-	
-	root->lowRight = pair<int, int>(width,height);
-
-	
-	root = BuildNode(imIn, make_pair(0,0), make_pair(width, height)); 
-
-
-}
-/**
- * Private helper function for the constructor. Recursively builds
- * the tree according to the specification of the constructor.
- * @param img reference to the original input image.
- * @param ul upper left point of current node's rectangle.
- * @param lr lower right point of current node's rectangle.
- */
-Node* QTree::BuildNode(const PNG& img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
-		RGBAPixel p1;
-
-		Node* node = new Node(ul,lr, p1);	
-
-
-		if(ul.first == lr.first && ul.second == lr.second){ //height and width = 1
-		return new Node(ul, lr, *(img.getPixel(ul.first, ul.second)));
-		
-	} else if((lr.first - ul.first) == 1){ //difference in width	
-		//height of img paritition 
-		unsigned int img_size = lr.second - ul.second;
-		
-		// sets corners of NW 
-		node->NW = new Node(ul, make_pair(ul.first, ul.second + (img_size)/2), p1);
-
-		//sets corners of SW
-		node->SW = new Node(make_pair(ul.first, (ul.second + (img_size)/2 +1)), lr , p1)
-		
-
-	} else if((lr.second - ul.second) == 1){ //difference in height
-	
-			//height of img paritition 
-		unsigned int img_size = lr.first - ul.first;	
-		// sets corners of NW and sets pixel to default constructor pixel
-			
-			node->NW = new Node(ul, make_pair(ul.first + (img_size)/2, ul.second), p1);
-	
-		//sets corner of NE
-			node->NE = new Node(make_pair((ul.first + (img_size)/2 +1), ul.second), lr, p1);
-	}
-	//TODO 
-	//set up regular parameters 
-	//somehow find avg?
-
-
-	node->NW = new Node(ul, make_pair(ul.first/2, ul.second/2), p1);
-	node->NE = new Node(make_pair(width/2, height/2), , p1);
-
-	node->SW = new Node(ul, make_pair(width/2, height/2), p1);
-	node->SE = new Node(ul, make_pair(width/2, height/2), p1);
-	// BuildNode(NW);
-	// BuildNode(NE);
-	// BuildNode(SW);
-	// BuildNode(SE);
-
-
-}
-
-RGBAPixel QTree::getAverage(Node* node) {
-    int red = 0;
-    int green = 0;
-    int blue = 0;
-    
-
-    if (node->NW != NULL) {
-        red += node->NW->avg.r;
-        green += node->NW->avg.g;
-        blue += node->NW->avg.b;
-    }
-
-    if (node->NE != NULL) {
-        red += node->NE->avg.r;
-        green += node->NE->avg.g;
-        blue += node->NE->avg.b;
-    }
-
-    if (node->SW != NULL) {
-        red += node->SW->avg.r;
-        green += node->SW->avg.g;
-        blue += node->SW->avg.b;
-
-    }
-
-    if (node->SE != NULL) {
-        red += node->SE->avg.r;
-        green += node->SE->avg.g;
-        blue += node->SE->avg.b;
-    }
-
-    RGBAPixel avg;
-    avg.r = red / 3;
-    avg.g = green / 3;
-    avg.b = blue / 3;
-
-    return avg;
+	root = BuildNode(imIn, make_pair(0, 0), make_pair(imIn.width() - 1, imIn.height() - 1));
 }
 
 
@@ -159,43 +56,20 @@ RGBAPixel QTree::getAverage(Node* node) {
  * @param rhs The right hand side of the assignment statement.
  */
 QTree& QTree::operator=(const QTree& rhs) {
-    // Check for self-assignment
-    if (this != &rhs && isValid(rhs)) {
-
-        root = Copy(rhs.root); 
+	// check for self assignment 
+    if (this == &rhs) {
+        return *this;
     }
+
+    // clear the current tree
+    Clear(); 
+
+    // copy the data from rhs
+    Copy(rhs); 
 
     return *this;
+	
 }
-
-
-bool QTree::isValid(Node* node) {
-    if (node == NULL) {
-        return true;
-    }
-
-    int width = node->lowRight.first - node->upLeft.first;
-    int height = node->lowRight.second - node->upLeft.second;
-
-    if (width < 1 || height < 1) {
-        return false;
-    }
-
-    if (width == 1 && height == 1) {
-        return node->NW == NULL && node->NE == NULL && node->SW == NULL && node->SE == NULL;
-    }
-
-    if (width == 1) {
-        return node->NE == NULL && node->SE == NULL && isValid(node->NW) && isValid(node->SW);
-    }
-
-    if (height == 1) {
-        return node->SW == NULL && node->SE == NULL && isValid(node->NW) && isValid(node->NE);
-    }
-
-    return isValid(node->NW) && isValid(node->NE) && isValid(node->SW) && isValid(node->SE);
-}
-
 
 /**
  * Render returns a PNG image consisting of the pixels
@@ -210,39 +84,20 @@ bool QTree::isValid(Node* node) {
  * @pre scale > 0
  */
 PNG QTree::Render(unsigned int scale) const {
-    // Create a new PNG image
-    PNG img(width * scale, height * scale);
+    if (!root) {
+        return PNG();  // empty image
+    }
 
-    // Draw each leaf node's rectangle onto the PNG canvas
-    drawRectangle(root, img, scale);
+    //dimensions of the scaled image
+    unsigned int newWidth = (root->lowRight.first - root->upLeft.first + 1) * scale;
+    unsigned int newHeight = (root->lowRight.second - root->upLeft.second + 1) * scale;
+    PNG img(newWidth, newHeight);
+
+    // render each leaf node
+    renderNode(img, root, scale);
 
     return img;
 }
-
-void QTree::drawRectangle(Node* node, PNG& img, unsigned int scale) const {
-    if (node == NULL) {
-        return;
-    }
-
-    // If the node is a leaf node, draw its rectangle
-    if (node->NW == NULL && node->NE == NULL && node->SW == NULL && node->SE == NULL) {
-
-        for (int x = node->upLeft.first * scale; x < node->lowRight.first * scale; x++) {
-
-            for (int y = node->upLeft.second * scale; y < node->lowRight.second * scale; y++) {
-                RGBAPixel* pixel = img.getPixel(x, y);
-                *pixel = node->avg;
-            }
-        }
-    } else {
-        // If the node is not a leaf node, recursively draw its children's rectangles
-        drawRectangle(node->NW, img, scale);
-        drawRectangle(node->NE, img, scale);
-        drawRectangle(node->SW, img, scale);
-        drawRectangle(node->SE, img, scale);
-    }
-}
-
 
 /**
  *  Prune function trims subtrees as high as possible in the tree.
@@ -258,8 +113,7 @@ void QTree::drawRectangle(Node* node, PNG& img, unsigned int scale) const {
  * @pre this tree has not previously been pruned, nor is copied from a previously pruned tree.
  */
 void QTree::Prune(double tolerance) {
-	// ADD YOUR IMPLEMENTATION BELOW
-	
+    pruneHelper(root, tolerance);
 }
 
 /**
@@ -277,31 +131,8 @@ void QTree::Prune(double tolerance) {
  *  You may want a recursive helper function for this one.
  */
 void QTree::FlipHorizontal() {
-    flip(root);
+    flipHorizontalHelper(root);
 }
-
-void QTree::flip(Node* node) {
-    if (node == NULL) {
-        return;
-    }
-
-    // Swap the NW and SW children
-    Node* temp = node->NW;
-    node->NW = node->SW;
-    node->SW = temp;
-
-    // Swap the NE and SE children
-    temp = node->NE;
-    node->NE = node->SE;
-    node->SE = temp;
-
-    // Recursively flip the children
-    flip(node->NW);
-    flip(node->NE);
-    flip(node->SW);
-    flip(node->SE);
-}
-
 
 /**
  *  RotateCCW rearranges the contents of the tree, so that its
@@ -321,68 +152,210 @@ void QTree::flip(Node* node) {
  *  You may want a recursive helper function for this one.
  */
 void QTree::RotateCCW() {
-    rotate(root);
+    rotateCCWHelper(root);
 }
 
-void QTree::rotate(Node* node) {
-    if (node == NULL) {
+/**
+ * Destroys all dynamically allocated memory associated with the
+ * current QTree object. Complete for PA3.
+ * You may want a recursive helper function for this one.
+ */
+void QTree::Clear() {
+    clearHelper(root);
+    root = nullptr; 
+}
+
+/**
+ * Copies the parameter other QTree into the current QTree.
+ * Does not free any memory. Called by copy constructor and operator=.
+ * You may want a recursive helper function for this one.
+ * @param other The QTree to be copied.
+ */
+void QTree::Copy(const QTree& other) {
+    root = copyHelper(other.root);
+}
+
+/**
+ * Private helper function for the constructor. Recursively builds
+ * the tree according to the specification of the constructor.
+ * @param img reference to the original input image.
+ * @param ul upper left point of current node's rectangle.
+ * @param lr lower right point of current node's rectangle.
+ */
+Node* QTree::BuildNode(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
+    // if leaf node
+    if (ul.first == lr.first && ul.second == lr.second) {
+        RGBAPixel* pixel = img.getPixel(ul.first, ul.second);
+        return new Node(ul, lr, *pixel);
+    }
+
+    // average color of the region 
+    RGBAPixel avgColor = calculateAverageColor(img, ul, lr); 
+
+    Node* node = new Node(ul, lr, avgColor);
+
+    //  boundaries for the four children
+    unsigned int midX = (ul.first + lr.first) / 2;
+    unsigned int midY = (ul.second + lr.second) / 2;
+
+    // rcursively build child nodes
+    // odd width / height ..?
+    node->NW = (ul.second == lr.second) ? nullptr : BuildNode(img, ul, make_pair(midX, midY));
+    node->NE = (ul.second == lr.second) ? nullptr : BuildNode(img, make_pair(midX + 1, ul.second), make_pair(lr.first, midY));
+    node->SW = (ul.first == lr.first) ? nullptr : BuildNode(img, make_pair(ul.first, midY + 1), make_pair(midX, lr.second));
+    node->SE = (ul.first == lr.first || ul.second == lr.second) ? nullptr : BuildNode(img, make_pair(midX + 1, midY + 1), lr);
+
+    return node;
+}
+
+/*********************************************************/
+/*** IMPLEMENT YOUR OWN PRIVATE MEMBER FUNCTIONS BELOW ***/
+/*********************************************************/
+
+RGBAPixel QTree::calculateAverageColor(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
+    // coord of centre pixel in region
+    unsigned int centreX = (ul.first + lr.first) / 2;
+    unsigned int centreY = (ul.second + lr.second) / 2;
+
+    // color of centre pixel
+    RGBAPixel* centrePixel = img.getPixel(centreX, centreY);
+
+    return *centrePixel;
+}
+
+void QTree::renderNode(PNG & img, Node* node, unsigned int scale) const {
+    if (!node) {
         return;
     }
 
-    // Swap the children in a counter-clockwise direction
+    // check if the node is a leaf node
+    if (!node->NW && !node->NE && !node->SW && !node->SE) {
+        // rectangle bounds of the node
+        unsigned int startX = node->upLeft.first * scale;
+        unsigned int startY = node->upLeft.second * scale;
+        unsigned int endX = (node->lowRight.first + 1) * scale;
+        unsigned int endY = (node->lowRight.second + 1) * scale;
+
+        // draw rectangle
+        for (unsigned int x = startX; x < endX; x++) {
+            for (unsigned int y = startY; y < endY; y++) {
+                RGBAPixel* pixel = img.getPixel(x, y);
+                *pixel = node->avg;
+            }
+        }
+    } else {
+        //  render child nodes
+        renderNode(img, node->NW, scale);
+        renderNode(img, node->NE, scale);
+        renderNode(img, node->SW, scale);
+        renderNode(img, node->SE, scale);
+    }
+}
+
+void QTree::flipHorizontalHelper(Node* node) {
+    if (!node) {
+        return; 
+    }
+
+    // swap the NW and NE children and SW and SE children
+    swap(node->NW, node->NE);
+    swap(node->SW, node->SE);
+
+    // recursively flip the children
+    flipHorizontalHelper(node->NW);
+    flipHorizontalHelper(node->NE);
+    flipHorizontalHelper(node->SW);
+    flipHorizontalHelper(node->SE);
+}
+
+void QTree::clearHelper(Node* node) {
+    if (!node) {
+        return; 
+    }
+
+    // recursively clear child nodes
+    clearHelper(node->NW);
+    clearHelper(node->NE);
+    clearHelper(node->SW);
+    clearHelper(node->SE);
+
+    delete node;
+}
+
+Node* QTree::copyHelper(Node* otherNode) {
+    if (!otherNode) {
+        return nullptr; 
+    }
+
+    // new node with the same data as otherNode
+    Node* newNode = new Node(otherNode->upLeft, otherNode->lowRight, otherNode->avg);
+
+    // copy child nodes
+    newNode->NW = copyHelper(otherNode->NW);
+    newNode->NE = copyHelper(otherNode->NE);
+    newNode->SW = copyHelper(otherNode->SW);
+    newNode->SE = copyHelper(otherNode->SE);
+
+    return newNode;
+}
+
+void QTree::rotateCCWHelper(Node* node) {
+    if (!node) {
+        return; 
+    }
+
+    // rotate children CCW
     Node* temp = node->NW;
     node->NW = node->NE;
     node->NE = node->SE;
     node->SE = node->SW;
     node->SW = temp;
 
-    // Recursively rotate the children
-    rotate(node->NW);
-    rotate(node->NE);
-    rotate(node->SW);
-    rotate(node->SE);
+    // rotate children 
+    rotateCCWHelper(node->NW);
+    rotateCCWHelper(node->NE);
+    rotateCCWHelper(node->SW);
+    rotateCCWHelper(node->SE);
 }
 
-/void QTree::Clear() {
-    clear(root);
-    root = NULL;
+void QTree::pruneHelper(Node* node, double tolerance) {
+    if (!node) return; 
+
+    if (isLeaf(node)) return;
+
+    // check if leaf descendants are within the tolerance
+    if (allLeavesWithinTolerance(node, node->avg, tolerance)) {
+        // prune subtree
+        clearHelper(node->NW);
+        clearHelper(node->NE);
+        clearHelper(node->SW);
+        clearHelper(node->SE);
+        // set children to nullptr after pruning
+        node->NW = nullptr;
+        node->NE = nullptr;
+        node->SW = nullptr;
+        node->SE = nullptr;
+    } else {
+        //  prune child subtrees
+        pruneHelper(node->NW, tolerance);
+        pruneHelper(node->NE, tolerance);
+        pruneHelper(node->SW, tolerance);
+        pruneHelper(node->SE, tolerance);
+    }
 }
 
-void QTree::clear(Node* node) {
-    if (node == NULL) {
-        return;
+bool QTree::allLeavesWithinTolerance(Node* node, const RGBAPixel& avg, double tolerance) {
+    if (isLeaf(node)) {
+        return node->avg.distanceTo(avg) <= tolerance;
     }
 
-    // Recursively clear the children
-    clear(node->NW);
-    clear(node->NE);
-    clear(node->SW);
-    clear(node->SE);
-
-    // Delete the node
-    delete node;
+    //  check all children
+    return (!node->NW || allLeavesWithinTolerance(node->NW, avg, tolerance)) &&
+           (!node->NE || allLeavesWithinTolerance(node->NE, avg, tolerance)) &&
+           (!node->SW || allLeavesWithinTolerance(node->SW, avg, tolerance)) &&
+           (!node->SE || allLeavesWithinTolerance(node->SE, avg, tolerance));
 }
 
-void QTree::Copy(const QTree& other) {
-    root = copy(other.root);
-}
-
-QTree::Node* QTree::copy(Node* node) {
-    if (node == NULL) {
-        return NULL;
-    }
-
-    // Create a new node and copy the data
-    Node* newNode = new Node;
-    newNode->upLeft = node->upLeft;
-    newNode->lowRight = node->lowRight;
-    newNode->avg = node->avg;
-
-    // Recursively copy the children
-    newNode->NW = copy(node->NW);
-    newNode->NE = copy(node->NE);
-    newNode->SW = copy(node->SW);
-    newNode->SE = copy(node->SE);
-
-    return newNode;
+bool QTree::isLeaf(Node* node) {
+    return node && !node->NW && !node->NE && !node->SW && !node->SE;
 }
