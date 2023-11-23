@@ -182,6 +182,8 @@ void QTree::Copy(const QTree& other) {
  * @param ul upper left point of current node's rectangle.
  * @param lr lower right point of current node's rectangle.
  */
+
+
 Node* QTree::BuildNode(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
     // if leaf node
     if (ul.first == lr.first && ul.second == lr.second) {
@@ -194,17 +196,15 @@ Node* QTree::BuildNode(const PNG & img, pair<unsigned int, unsigned int> ul, pai
 
     Node* node = new Node(ul, lr, avgColor);
 
-    //  boundaries for the four children
     unsigned int midX = (ul.first + lr.first) / 2;
     unsigned int midY = (ul.second + lr.second) / 2;
 
-    // rcursively build child nodes
-    // odd width / height ..?
-    node->NW = (ul.second == lr.second) ? nullptr : BuildNode(img, ul, make_pair(midX, midY));
-    node->NE = (ul.second == lr.second) ? nullptr : BuildNode(img, make_pair(midX + 1, ul.second), make_pair(lr.first, midY));
-    node->SW = (ul.first == lr.first) ? nullptr : BuildNode(img, make_pair(ul.first, midY + 1), make_pair(midX, lr.second));
-    node->SE = (ul.first == lr.first || ul.second == lr.second) ? nullptr : BuildNode(img, make_pair(midX + 1, midY + 1), lr);
+    node->NW = (midX < lr.first && midY < lr.second) ? BuildNode(img, ul, make_pair(midX, midY)) : nullptr;
+    node->NE = (midX + 1 < lr.first && midY < lr.second) ? BuildNode(img, make_pair(midX + 1, ul.second), make_pair(lr.first, midY)) : nullptr;
+    node->SW = (midX < lr.first && midY + 1 < lr.second) ? BuildNode(img, make_pair(ul.first, midY + 1), make_pair(midX, lr.second)) : nullptr;
+    node->SE = (midX + 1 < lr.first && midY + 1 < lr.second) ? BuildNode(img, make_pair(midX + 1, midY + 1), lr) : nullptr;
 
+	
     return node;
 }
 
@@ -213,13 +213,14 @@ Node* QTree::BuildNode(const PNG & img, pair<unsigned int, unsigned int> ul, pai
 /*********************************************************/
 
 RGBAPixel QTree::calculateAverageColor(const PNG & img, pair<unsigned int, unsigned int> ul, pair<unsigned int, unsigned int> lr) {
-    // coord of centre pixel in region
-    unsigned int centreX = (ul.first + lr.first) / 2;
-    unsigned int centreY = (ul.second + lr.second) / 2;
+    unsigned int centreX = std::min((ul.first + lr.first) / 2, img.width() - 1);
+    unsigned int centreY = std::min((ul.second + lr.second) / 2, img.height() - 1);
 
-    // color of centre pixel
+
     RGBAPixel* centrePixel = img.getPixel(centreX, centreY);
-
+    if (!centrePixel) {
+        return RGBAPixel(); // Return a default pixel to avoid segmentation fault
+    }
     return *centrePixel;
 }
 
