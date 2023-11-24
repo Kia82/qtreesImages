@@ -29,12 +29,27 @@ void TestPrune(double tol);
 
 int main(int argc, char* argv[]) {
 
-	TestBuildRender(1);
-	TestBuildRender(6);
-	TestFlipHorizontal();
+	//TestBuildRender(1);
+	//TestBuildRender(6);
+	//TestFlipHorizontal();
 	TestRotateCCW();
-	TestPrune(0.01);
-	TestPrune(0.05);
+	//TestPrune(0.01);
+	//TestPrune(0.05);
+
+	PNG image(2, 2); 
+
+    *image.getPixel(0, 0) = RGBAPixel(255, 0, 0);   // Red
+    *image.getPixel(1, 0) = RGBAPixel(0, 255, 0);   // Green
+    *image.getPixel(0, 1) = RGBAPixel(0, 0, 255);   // Blue
+    *image.getPixel(1, 1) = RGBAPixel(255, 255, 0); // Yellow
+
+
+    image.writeToFile("original.png");
+
+    QTree tree(image);
+    tree.RotateCCW();
+    PNG flippedImage = tree.Render(1); 
+    flippedImage.writeToFile("hello.png");
 
 	return 0;
 }
@@ -128,7 +143,7 @@ void TestRotateCCW() {
 	PNG output = t.Render(1);
 	cout << "done." << endl;
 
-	// write output PNG
+	// // write output PNG
 	string outfilename = "images-output/malachi-rotateccw_x1-render_x1.png";
 	cout << "Writing rendered PNG to file... ";
 	output.writeToFile(outfilename);
